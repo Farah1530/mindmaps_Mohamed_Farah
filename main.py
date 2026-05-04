@@ -1,6 +1,5 @@
-# prototype d'affichage de mindmap en radial et forum
-# avec possibilité d'éditer les nodes (si auteur) ou d'en ajouter en dessous    
-# JCY pour SI-CA1 (projet Python) - 2025-2026 -v0.1
+# prototype d'affichage de mindmap en radial et forum   
+# Farah MOHAMED SI-CA1 (projet Python) - 2025-2026 -v0.1
 # 13 avril 2026
 # main.py : affichage de la fenêtre principale, gestion de la connexion et des différentes vues (tables + mindmap)
 
