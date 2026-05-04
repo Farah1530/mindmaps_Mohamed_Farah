@@ -69,8 +69,8 @@ def on_node_double_click(event):
 def display_mindmap_radial(frame, nodes):
     container = tk.Frame(frame)
     container.pack(fill='both', expand=True) #prend toute la place disponible
+    canvas = tk.Canvas(container, bg='yellow', width=3000, height=2000)#la taille du canvas
 
-    canvas = tk.Canvas(container, bg='yellow') # c est la zone de dessin
     vsb = ttk.Scrollbar(container, orient="vertical", command=canvas.yview) #pour scroller verticalement
     hsb = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview) #pour scroller horizontalement
     canvas.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)#configurer le canvas pour que les scrollbars fonctionnent
@@ -85,33 +85,42 @@ def display_mindmap_radial(frame, nodes):
 
     canvas.bind("<MouseWheel>", zoom)
 
-    cx, cy = 1200, 400 # centre du canvas
-    level_radius = 200 # rayon des niveaux
+    cx, cy = 1500, 1000 # centre du canvas
+    level_radius = 250 # rayon des niveaux
 
     positions = {}  # stocke la position (x,y) de chaque node par son id
     #aussi IA
     def draw_radial(node, x, y, angle_start, angle_end, level): # dessiner un node en mode radial
         positions[node['id']] = (x, y) # stocker la position du node
         color = node.get('color', 'red') if level > 0 else 'red' # couleur du node
-        canvas.create_oval(x-45, y-45, x+45, y+55, fill=color, outline='red') # dessiner le cercle du node
+        canvas.create_oval(x-50, y-50, x+50, y+50, fill=color, outline='red') # dessiner le cercle du node
         canvas.create_text(x, y, text=node['text'][:15], font=('Arial', 7)) # dessiner le texte du node
 
         children = [n for n in nodes if n['parent_id'] == node['id']] # trouver les enfants du node
         if not children: # si pas d'enfants
             return # rien à dessiner
 
-        angle_step = (angle_end - angle_start) / len(children) # pas entre chaque enfant
+        angle_step = (angle_end - angle_start) / max(len(children), 1)  
         for i, child in enumerate(children): # dessiner les lignes vers les enfants
             a = angle_start + angle_step * i + angle_step / 2 # angle pour le child
             rad = math.radians(a) # convertir l'angle en radians
-            radius = max(level_radius, len(children) * 80)
+            radius = level * 180 + 200
             child_x = x + radius * math.cos(rad)
             child_y = y + radius * math.sin(rad)
-            canvas.create_line(x, y, child_x, child_y, fill='gray') # dessiner la ligne vers le child
-            draw_radial(child, child_x, child_y,
-                        angle_start + angle_step * i, # angle de début pour le child
-                        angle_start + angle_step * (i + 1), # angle de fin pour le child
-                        level + 1)
+            dx = child_x - x
+            dy = child_y - y
+            dist = math.sqrt(dx*dx + dy*dy)
+
+            offset = 50  # rayon du cercle
+
+            start_x = x + (dx / dist) * offset
+            start_y = y + (dy / dist) * offset
+
+            end_x = child_x - (dx / dist) * offset
+            end_y = child_y - (dy / dist) * offset
+
+            canvas.create_line(start_x, start_y, end_x, end_y, fill='gray')
+            draw_radial(child, child_x, child_y, a - angle_step / 2, a + angle_step / 2, level + 1) # dessiner le child de manière récursive
 
     root_node = next((n for n in nodes if n['parent_id'] is None or n['parent_id'] == 0), None) # trouver le root node
     if root_node: # si le root node existe
