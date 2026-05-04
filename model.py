@@ -7,6 +7,7 @@ import mysql.connector
 import bcrypt
 from utils.config import get_db_config
 
+
 # Fonction pour obtenir une connexion à la base de données
 def get_connection(db_mode="local"):
     cfg = get_db_config(db_mode)
@@ -36,6 +37,16 @@ def get_maps(db_mode):
     return fetch_all("select id, title, author_id from maps", None, db_mode)
 
 
+def get_users(db_mode):
+    return fetch_all("select id, pseudo, color from users", None, db_mode)
+
+def get_nodes(db_mode):
+    return fetch_all("select id, parent_id, author_id, text, level from nodes", None, db_mode)
+
+def get_nodes( db_mode):
+    return fetch_all("select id, parent_id, author_id, text, level from nodes ", None, db_mode)
+
+
 # renvoie la liste de tous les nodes d'un map (avec le pseudo de l'auteur et sa couleur)
 def get_nodes_for_map(map_id, db_mode):
     return fetch_all("select nodes.id, parent_id, author_id, text, nodes.level,users.color " \
@@ -62,3 +73,39 @@ def check_login(pseudo, password, db_mode="local"):
         return row
     return None
 
+def check_register(pseudo,password, db_mode="local"):
+    db = get_connection(db_mode)
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM users WHERE pseudo=%s", (pseudo,))
+    row = cursor.fetchone()
+    db.close()
+    if row:
+        return None  # L'utilisateur existe déjà
+    # Si l'utilisateur n'existe pas, on peut l'enregistrer
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    db = get_connection(db_mode)
+    cursor = db.cursor()
+    cursor.execute("INSERT INTO users (pseudo, hash) VALUES (%s, %s)", (pseudo, hashed))
+    db.commit()
+    db.close()
+    return "OK"          
+
+
+#fonction pour vérifier les inscriptions
+def check_registration(pseudo, password, db_mode="local"):
+    db = get_connection(db_mode)
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT id FROM users WHERE pseudo=%s", (pseudo,))
+    row = cursor.fetchone()
+    db.close()
+    if row:
+        return None  # L'utilisateur existe déjà
+    # Si l'utilisateur n'existe pas, on peut l'enregistrer
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    db = get_connection(db_mode)
+    cursor = db.cursor()
+    cursor.execute("INSERT INTO users (pseudo, hash) VALUES (%s, %s)", (pseudo, hashed))
+    db.commit()
+    db.close()
+
+    return {"id": cursor.lastrowid, "pseudo": pseudo}

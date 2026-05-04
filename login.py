@@ -43,3 +43,6 @@ def show_login(parent, db_mode="local" ):
     
     # Empêche d'accéder à la fenêtre principale tant que login est ouvert
     parent.wait_window(win)
+
+
+

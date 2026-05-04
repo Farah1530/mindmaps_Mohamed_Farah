@@ -8,8 +8,9 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox, simpledialog
 from login import show_login
+from register import show_register
 from tree_display import display_array
-from model import get_maps,  get_nodes_for_map
+from model import get_maps,  get_nodes_for_map, get_users , get_nodes
 from utils.session import Session
 import math
 
@@ -26,7 +27,21 @@ def display_maps():
     result = get_maps(db_mode)
     frm_result.tree = display_array(frm_result, result)
     frm_result.tree.bind("<Double-1>", on_map_double_click) # double clic pour afficher le mindmap dans right_frame selon le mode sélectionné (tree, radial ou forum)
-       
+
+
+#afficher les users
+def display_users():
+    result = get_users(db_mode)
+    frm_result.tree = display_array(frm_result, result)
+    frm_result.tree.bind("<Double-1>", on_user_double_click) # double clic pour afficher les détails de l'utilisateur
+
+
+#afficher les nodes d'un utilisateur
+def display_nodes():
+    result = get_nodes( db_mode)
+    frm_result.tree = display_array(frm_result, result)
+    frm_result.tree.bind("<Double-1>", on_node_double_click)  # double clic pour afficher les détails du node
+
 # traitement de l'affichage d'un mindmap selon le mode sélectionné (tree, radial ou forum)
 def on_map_double_click(event):
     selected = frm_result.tree.selection()
@@ -35,6 +50,75 @@ def on_map_double_click(event):
         values = item['values']
         map_id = values[0]  # Supposons que id est la première colonne
         display_mindmap(map_id)
+
+def on_user_double_click(event):
+    selected = frm_result.tree.selection()
+    if selected:
+        item = frm_result.tree.item(selected[0])
+        values = item['values']
+        user_id = values[0]  # Supposons que id est la première colonne
+        display_user_profile(user_id)
+
+def on_node_double_click(event):
+    selected = frm_result.tree.selection()
+    if selected:
+        item = frm_result.tree.item(selected[0])
+        values = item['values']
+        node_id = values[0]  # Supposons que id est la première colonne
+        display_nodes(node_id)
+#cette fonction j ai utilsé l'IA
+def display_mindmap_radial(frame, nodes):
+    container = tk.Frame(frame)
+    container.pack(fill='both', expand=True) #prend toute la place disponible
+
+    canvas = tk.Canvas(container, bg='yellow') # c est la zone de dessin
+    vsb = ttk.Scrollbar(container, orient="vertical", command=canvas.yview) #pour scroller verticalement
+    hsb = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview) #pour scroller horizontalement
+    canvas.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)#configurer le canvas pour que les scrollbars fonctionnent
+    vsb.pack(side="right", fill="y")#pour afficher la scrollbar verticale
+    hsb.pack(side="bottom", fill="x")#pour afficher la scrollbar horizontale
+    canvas.pack(side="left", fill="both", expand=True)#pour afficher le canvas et qu il prenne toute la place disponible
+    # zoom avec la molette de la souris j ai utilisé l'IA
+    def zoom(event):
+        factor = 1.1 if event.delta > 0 else 0.9
+        canvas.scale("all", event.x, event.y, factor, factor)
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    canvas.bind("<MouseWheel>", zoom)
+
+    cx, cy = 1200, 400 # centre du canvas
+    level_radius = 200 # rayon des niveaux
+
+    positions = {}  # stocke la position (x,y) de chaque node par son id
+    #aussi IA
+    def draw_radial(node, x, y, angle_start, angle_end, level): # dessiner un node en mode radial
+        positions[node['id']] = (x, y) # stocker la position du node
+        color = node.get('color', 'red') if level > 0 else 'red' # couleur du node
+        canvas.create_oval(x-45, y-45, x+45, y+55, fill=color, outline='red') # dessiner le cercle du node
+        canvas.create_text(x, y, text=node['text'][:15], font=('Arial', 7)) # dessiner le texte du node
+
+        children = [n for n in nodes if n['parent_id'] == node['id']] # trouver les enfants du node
+        if not children: # si pas d'enfants
+            return # rien à dessiner
+
+        angle_step = (angle_end - angle_start) / len(children) # pas entre chaque enfant
+        for i, child in enumerate(children): # dessiner les lignes vers les enfants
+            a = angle_start + angle_step * i + angle_step / 2 # angle pour le child
+            rad = math.radians(a) # convertir l'angle en radians
+            radius = max(level_radius, len(children) * 80)
+            child_x = x + radius * math.cos(rad)
+            child_y = y + radius * math.sin(rad)
+            canvas.create_line(x, y, child_x, child_y, fill='gray') # dessiner la ligne vers le child
+            draw_radial(child, child_x, child_y,
+                        angle_start + angle_step * i, # angle de début pour le child
+                        angle_start + angle_step * (i + 1), # angle de fin pour le child
+                        level + 1)
+
+    root_node = next((n for n in nodes if n['parent_id'] is None or n['parent_id'] == 0), None) # trouver le root node
+    if root_node: # si le root node existe
+        draw_radial(root_node, cx, cy, 0, 360, 0) # dessiner le root node
+
+    canvas.configure(scrollregion=canvas.bbox("all")) # configurer la zone de défilement
 
 # affichage du mindmap selon le mode sélectionné
 def display_mindmap(map_id):
@@ -51,8 +135,27 @@ def display_mindmap(map_id):
             display_mindmap_tree(right_frame, nodes)
         elif mode == 'forum':
             display_mindmap_forum(right_frame, nodes)
+        elif mode == 'radial':
+            display_mindmap_radial(right_frame, nodes)
     else:
         tk.Label(right_frame, text="Aucun node pour ce mindmap").pack()
+
+def display_user_profile(user_id):
+    global current_user_id
+    current_user_id = user_id
+    nodes = get_nodes(db_mode)
+    # Nettoyer right_frame
+    for widget in right_frame.winfo_children():
+        widget.destroy()
+    # Afficher les nodes selon le mode
+    if nodes:
+        mode = display_mode.get()
+        if mode == 'tree':
+            display_mindmap_tree(right_frame, nodes)
+        elif mode == 'forum':
+            display_mindmap_forum(right_frame, nodes)
+    else:
+        tk.Label(right_frame, text="Aucun node pour cet utilisateur").pack()
 
 def refresh_mindmap():
     if current_map_id is not None:
@@ -78,6 +181,8 @@ def display_mindmap_tree(frame, nodes):
                 insert_nodes(item, node['id'])
 
     insert_nodes('')
+
+
 
     # Scrollbars
     vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
@@ -194,11 +299,25 @@ def login():
     if Session.is_authenticated():
         lbl_user.config(text=f"Connecté en tant que {Session.pseudo}") 
 
+#fonction pour s'inscrire
+def register():
+    show_register(root)
+    if Session.is_authenticated():
+        lbl_user.config(text=f"Connecté en tant que {Session.pseudo}")
+
+
+def logout():
+    Session.logout()
+    lbl_user.config(text="Non connecté")
+
 
 # fenêtre principale
 root = tk.Tk()
 
-root.minsize(1200, 800)  # Ajusté pour accommoder les deux frames
+
+
+root.minsize(1600, 1200)  # Ajusté pour accommoder les deux frames
+root.state('zoomed')  # ouvre en plein écran
 root.title("Mindmaps - Version de base v0.1")
 
 # Création du menu
@@ -207,11 +326,15 @@ menubar = tk.Menu(root)
 # Menu Afficher
 display_menu = tk.Menu(menubar, tearoff=0)
 display_menu.add_command(label="Maps", command=display_maps)
+display_menu.add_command(label="Users", command=display_users)
+display_menu.add_command(label="Nodes", command= display_nodes)
 menubar.add_cascade(label="Afficher", menu=display_menu)
 
 # Menu Login/Register
 login_menu = tk.Menu(menubar, tearoff=0)
 login_menu.add_command(label="Login", command=login)
+login_menu.add_command(label="Register", command=register)
+login_menu.add_command(label="Logout", command=logout)
 menubar.add_cascade(label="Login/Register", menu=login_menu)
 
 # Menu local/remote
@@ -261,7 +384,7 @@ frm_options.grid(column=0, row=2, pady=10)
 tk.Label(frm_options, text="Mode d'affichage Mindmap:").pack(anchor='w')
 tk.Radiobutton(frm_options, text="Treeview", variable=display_mode, value='tree', command=refresh_mindmap).pack(anchor='w')
 tk.Radiobutton(frm_options, text="Forum", variable=display_mode, value='forum', command=refresh_mindmap).pack(anchor='w')
-
+tk.Radiobutton(frm_options, text="Radial", variable=display_mode, value='radial', command=refresh_mindmap).pack(anchor='w')
 # frame pour l'affichage des résultats dans left_frame
 frm_result = tk.Frame(left_frame, bg="lightgreen")
 frm_result.grid(column=0, row=3, columnspan=2, sticky="nsew", padx=10, pady=10)
