@@ -109,3 +109,28 @@ def check_registration(pseudo, password, db_mode="local"):
     db.close()
 
     return {"id": cursor.lastrowid, "pseudo": pseudo}
+
+
+def update_node_text(node_id, new_text, db_mode="local"):
+    db = get_connection(db_mode)
+    cursor = db.cursor()
+    cursor.execute("UPDATE nodes SET text=%s WHERE id=%s", (new_text, node_id))
+    db.commit()
+    db.close()
+
+def delete_node(node_id, db_mode="local"):
+    db = get_connection(db_mode)
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM nodes WHERE id=%s", (node_id,))
+    db.commit()
+    db.close()
+
+def insert_node(map_id, parent_id, author_id, text, level, db_mode="local"):
+    db = get_connection(db_mode)
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO nodes (map_id, parent_id, author_id, text, level) VALUES (%s, %s, %s, %s, %s)",
+        (map_id, parent_id, author_id, text, level)
+    )
+    db.commit()
+    db.close()

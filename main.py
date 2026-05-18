@@ -12,6 +12,7 @@ from tree_display import display_array
 from model import get_maps,  get_nodes_for_map, get_users , get_nodes
 from utils.session import Session
 import math
+from model import get_maps, get_nodes_for_map, get_users, get_nodes, update_node_text, delete_node, insert_node
 
 # Variable globale pour le mode DB
 db_mode = None
@@ -65,6 +66,7 @@ def on_node_double_click(event):
         values = item['values']
         node_id = values[0]  # Supposons que id est la première colonne
         display_nodes(node_id)
+        
 #cette fonction j ai utilsé l'IA
 def display_mindmap_radial(frame, nodes):
     container = tk.Frame(frame)
@@ -222,6 +224,8 @@ def display_mindmap_forum(frame, nodes):
 
     canvas.bind("<Configure>", update_scroll_region)
 
+
+
     # Trouver le root
     root_node = next((n for n in nodes if n['parent_id'] is None or n['parent_id'] == 0), None)
     if not root_node:
@@ -269,10 +273,10 @@ def display_mindmap_forum(frame, nodes):
     update_scroll_region()
 
 # Cette fonction propose 3 actions sur un node : éditer le texte, supprimer le node ou insérer un nouveau node en dessous
-def edit_node(event, node):
-    #if not check_auth():
-    #    return
-    menu = tk.Menu(root, tearoff=0)
+def edit_node(event, node):  #event — contient les infos du clic souris (position x, y à l'écran) node — le dictionnaire du nœud sur lequel tu as cliqué (son id, texte, auteur, etc.)
+    if not check_auth(): #Si personne n'est connecté → on sort de la fonction, rien ne se passe.
+       return
+    menu = tk.Menu(root, tearoff=0)  # on crée un menu vide pour afficher les options 
     menu.add_command(label="Éditer", command=lambda: edit_text(node))
     menu.add_command(label="Supprimer", command=lambda: delete_node_action(node))
     menu.add_command(label="Insérer en dessous", command=lambda: insert_below(node))
@@ -280,15 +284,52 @@ def edit_node(event, node):
 
 # propose d'éditer le texte d'un node (seulement si l'utilisateur est l'auteur du node)
 def edit_text(node):
-    messagebox.showerror("Erreur", "Pas encore implémenté") # à implémenter : vérifier que l'utilisateur est l'auteur du node, puis proposer une fenêtre de saisie pour éditer le texte du node, puis mettre à jour le node dans la base de données et rafraîchir l'affichage du mindmap
+    # Vérifier que l'utilisateur connecté est bien l'auteur du node
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté")
+        return
+    if node["author_id"] != Session.id:
+        messagebox.showerror("Erreur", "Vous ne pouvez modifier que vos propres nœuds")
+        return
+    
+    # Demander le nouveau texte
+    new_text = simpledialog.askstring("Éditer", "Nouveau texte :", initialvalue=node["text"])
+    if new_text:  # si l'utilisateur n'a pas annulé
+        update_node_text(node["id"], new_text, db_mode)
+        refresh_mindmap()
 
 # propose de supprimer un node (seulement si l'utilisateur est l'auteur du node)
 def delete_node_action(node):
-    messagebox.showerror("Erreur", "Pas encore implémenté") # à implémenter : vérifier que l'utilisateur est l'auteur du node, puis proposer une confirmation pour supprimer le node, puis supprimer le node dans la base de données et rafraîchir l'affichage du mindmap
-
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté")
+        return
+    if node["author_id"] != Session.id:
+        messagebox.showerror("Erreur", "Vous ne pouvez supprimer que vos propres nœuds")
+        return
+    
+    # Demander confirmation
+    confirm = messagebox.askyesno("Supprimer", f"Supprimer le nœud '{node['text']}' ?")
+    if confirm:
+        delete_node(node["id"], db_mode)
+        refresh_mindmap()
 # propose d'insérer un nouveau node en dessous du node sélectionné (le nouveau node aura comme parent le node sélectionné)
 def insert_below(node):
-    messagebox.showerror("Erreur", "Pas encore implémenté") # à implémenter : proposer une fenêtre de saisie pour insérer le texte du nouveau node, puis insérer le node dans la base de données et rafraîchir l'affichage du mindmap
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté")
+        return
+    
+    # Demander le texte du nouveau nœud
+    new_text = simpledialog.askstring("Insérer", "Texte du nouveau nœud :")
+    if new_text:
+        insert_node(
+            map_id=current_map_id,
+            parent_id=node["id"],
+            author_id=Session.id,
+            text=new_text,
+            level=node["level"] + 1,
+            db_mode=db_mode
+        )
+        refresh_mindmap()
 
 
 # Permet de changer le mode de la base de données (local ou remote) et met à jour la variable globale db_mode
