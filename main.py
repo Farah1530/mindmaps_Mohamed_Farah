@@ -12,7 +12,7 @@ from tree_display import display_array
 from model import get_maps,  get_nodes_for_map, get_users , get_nodes
 from utils.session import Session
 import math
-from model import get_maps, get_nodes_for_map, get_users, get_nodes, update_node_text, delete_node, insert_node
+from model import get_maps, get_nodes_for_map, get_users, get_nodes, update_node_text, delete_node, insert_node, insert_map, update_map_title, delete_map
 
 # Variable globale pour le mode DB
 db_mode = None
@@ -24,9 +24,10 @@ def check_auth():
 
 # affichage des maps 
 def display_maps():
-    result = get_maps(db_mode)
+    result = get_maps(db_mode) #on va chercher tout les maps dans la BD 
     frm_result.tree = display_array(frm_result, result)
     frm_result.tree.bind("<Double-1>", on_map_double_click) # double clic pour afficher le mindmap dans right_frame selon le mode sélectionné (tree, radial ou forum)
+    frm_result.tree.bind("<Button-3>", on_map_right_click)
 
 
 #afficher les users
@@ -58,6 +59,100 @@ def on_user_double_click(event):
         values = item['values']
         user_id = values[0]  # Supposons que id est la première colonne
         display_user_profile(user_id)
+
+
+#on va la fonction de btn_click
+def on_map_right_click(event):
+    # trouver sur quelle ligne du treeview on a fait clic droit
+    item_id = frm_result.tree.identify_row(event.y)
+
+    # créer un menu vide (tearoff=0 = pas de trait en haut du menu)
+    map_menu = tk.Menu(root, tearoff=0)
+
+    # "Nouvelle map" est toujours disponible, même si on clique dans le vide
+    map_menu.add_command(label="Inserer un nouveau map", command=create_map_action)
+
+    # si on a cliqué sur une ligne existante (pas dans le vide)
+    if item_id:
+        # sélectionner visuellement la ligne cliquée
+        frm_result.tree.selection_set(item_id)
+
+        # récupérer les valeurs de la ligne (id, title, author_id)
+        values = frm_result.tree.item(item_id, "values")
+        map_id = values[0]    # première colonne = id
+        map_title = values[1] # deuxième colonne = titre
+
+        # ajouter Renommer et Supprimer seulement si une ligne est sélectionnée
+        map_menu.add_command(label="Editer le titre", command=lambda: rename_map_action(map_id, map_title))
+        map_menu.add_command(label="Supprimer", command=lambda: delete_map_action(map_id, map_title))
+
+    # afficher le menu exactement là où on a cliqué sur l'écran
+    map_menu.tk_popup(event.x_root, event.y_root)
+
+
+def create_map_action():
+    # vérifier que l'utilisateur est connecté
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté pour créer une map")
+        return  # on arrête la fonction ici
+
+    # afficher une petite fenêtre pour demander le titre
+    title = simpledialog.askstring("Nouvelle map", "Titre de la nouvelle map :")
+
+    # si l'utilisateur a écrit quelque chose (pas annulé)
+    if title:
+        new_map_id = insert_map(title, Session.id, db_mode)
+        insert_node(
+            map_id=new_map_id,
+            parent_id=None,   # pas de parent = c'est la racine
+            author_id=Session.id,
+            text=title,       # le texte de la racine = le titre de la map
+            level=0,          # niveau 0 = racine
+            db_mode=db_mode
+        )
+        display_maps()  # rafraîchir la liste pour voir la nouvelle map
+
+
+def rename_map_action(map_id, old_title):
+    # vérifier que l'utilisateur est connecté
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté")
+        return
+
+    # demander le nouveau titre, en pré-remplissant avec l'ancien
+    new_title = simpledialog.askstring("Renommer", "Nouveau titre :", initialvalue=old_title)
+
+    # si l'utilisateur a écrit quelque chose ET que c'est différent de l'ancien titre
+    if new_title and new_title != old_title:
+        update_map_title(map_id, new_title, db_mode)  # modifier en BD
+        display_maps()  # rafraîchir la liste
+
+
+def delete_map_action(map_id, map_title):
+    # vérifier que l'utilisateur est connecté
+    if not check_auth():
+        messagebox.showerror("Erreur", "Vous devez être connecté")
+        return
+
+    # demander confirmation avant de supprimer (action irréversible !)
+    confirm = messagebox.askyesno("Supprimer", f"Supprimer la map '{map_title}' et tous ses nœuds ?")
+
+    if confirm:
+        delete_map(map_id, db_mode)  # supprimer en BD (nodes + map)
+
+        global current_map_id
+        # si la map supprimée était celle affichée à droite
+        if current_map_id == int(map_id):
+            current_map_id = None  # plus de map sélectionnée
+
+            # nettoyer la zone droite (effacer le mindmap affiché)
+            for widget in right_frame.winfo_children():
+                widget.destroy()
+
+            # remettre le texte placeholder
+            tk.Label(right_frame, text="Zone Mindmap", font=("Arial", 16)).pack(expand=True)
+
+        display_maps()  # rafraîchir la liste
 
 def on_node_double_click(event):
     selected = frm_result.tree.selection()
@@ -344,11 +439,11 @@ def set_db_mode(mode):
 
 # connexion (appelle une fenêtre de login)
 def login():
-    show_login(root)
+    show_login(root,db_mode)
     if Session.is_authenticated():
         lbl_user.config(text=f"Connecté en tant que {Session.pseudo}") 
 
-#fonction pour s'inscrire
+#fonction pour s'inscrires
 def register():
     show_register(root)
     if Session.is_authenticated():

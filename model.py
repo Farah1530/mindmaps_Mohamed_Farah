@@ -134,3 +134,40 @@ def insert_node(map_id, parent_id, author_id, text, level, db_mode="local"):
     )
     db.commit()
     db.close()
+
+# je vais crée une nouvelle map
+# Créer une nouvelle map
+def insert_map(title, author_id, db_mode="local"):
+    db = get_connection(db_mode) #on se connecte à la DB
+    cursor = db.cursor()# on prepare l outil pour envoyer du sql grace a cursor
+    cursor.execute(
+        "INSERT INTO maps (title, author_id) VALUES (%s, %s)",
+        (title, author_id)
+    )   #et avc cursor.excute pour inserer les donnée que y a dans ()
+    db.commit()# sert a confirmer sans sa la sauvegarde ne se fait pas
+    new_id = cursor.lastrowid  # et la on recupere l id que my sql nous a donnée automatiquement 
+    db.close()  # et la on ferme la connexion 
+    return new_id #on reprend l id crée si on le veut directement
+
+
+# Renommer une map existante
+def update_map_title(map_id, new_title, db_mode="local"):
+    db = get_connection(db_mode) #connection a la db
+    cursor = db.cursor() #comme avant on prepare l outils 
+    cursor.execute(
+        "UPDATE maps SET title=%s WHERE id=%s",
+        (new_title, map_id)
+    ) # et on excute la commande uniquement pour cette id 
+    db.commit() #on confirme les modif
+    db.close() # on ferme 
+
+
+# Supprimer une map et tous ses nœuds
+# On supprime d'abord les nodes, sinon MySQL refuse (clé étrangère)
+def delete_map(map_id, db_mode="local"):
+    db = get_connection(db_mode) #connection avec la db
+    cursor = db.cursor() #prepare l outil   
+    cursor.execute("DELETE FROM nodes WHERE map_id=%s", (map_id,))  # 1. nodes d'abord parce que dans la BD les nodes ont un map_id donc MYSQL refuse d abord les node apres la map
+    cursor.execute("DELETE FROM maps WHERE id=%s", (map_id,))       # 2. puis la map
+    db.commit() #confirme les 2 suppression
+    db.close() #et on ferme
